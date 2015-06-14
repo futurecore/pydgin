@@ -153,15 +153,11 @@ class Sim( object ):
       # memory checks
 
       for i, num_bytes in enumerate(self.inst_sizes):
-        if s.debug.enabled( "mem" ):
-          print "\nAttempting to read {0} bytes from address {1}".format( num_bytes, pc )
         if s.debug.enabled( "memcheck" ):
           inst_bits = mem.read( pc, num_bytes )
         else:
           # we use trace elidable iread instead of just read
           inst_bits = mem.iread( pc, num_bytes )
-        if s.debug.enabled( "mem" ):
-          print "\nRead: {:0{width}b}".format( inst_bits, width=(num_bytes * 8) )
         try:
           inst, exec_fun = self.decode( inst_bits )
 
