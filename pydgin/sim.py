@@ -4,7 +4,6 @@
 # This is the common top-level simulator. ISA implementations can use
 # various hooks to configure the behavior.
 
-import os
 import sys
 
 # ensure we know where the pypy source code is
