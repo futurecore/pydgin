@@ -3,8 +3,7 @@
 #=======================================================================
 # This is the common top-level simulator. ISA implementations can use
 # various hooks to configure the behavior.
-
-import os
+import struct
 import sys
 
 # ensure we know where the pypy source code is
@@ -18,6 +17,7 @@ import sys
 #  print "NOTE: PYDGIN_PYPY_SRC_DIR not defined, using pure python " \
 #        "implementation"
 
+from pydgin.elf   import elf_reader
 from pydgin.debug import Debug, pad, pad_hex
 from pydgin.misc  import FatalError
 from pydgin.jit   import JitDriver, hint, set_user_param, set_param
@@ -100,6 +100,7 @@ class Sim( object ):
          bootstrap          initial stack and register state
 
     --max-insts <i> Run until the maximum number of instructions
+    --objdump, -o   Disassemble a given ELF file and print to STDOUT
     --jit <flags>   Set flags to tune the JIT (see
                     rpython.rlib.jit.PARAMETER_DOCS)
 
@@ -210,6 +211,7 @@ class Sim( object ):
       debug_starts_after = 0
       testbin            = False
       max_insts          = 0
+      objdump            = False
       envp               = []
 
       # we're using a mini state machine to parse the args
@@ -238,6 +240,9 @@ class Sim( object ):
 
           elif token == "--test":
             testbin = True
+
+          elif token == "--objdump" or token == "-o":
+            objdump = True
 
           elif token == "--debug" or token == "-d":
             prev_token = token
@@ -315,6 +320,43 @@ class Sim( object ):
       # Close after loading
 
       exe_file.close()
+
+      # If the user requested an object dump, print one and return.
+
+      if ( objdump ):
+        with open( filename, 'rb' ) as elf_fd:
+          image = elf_reader( elf_fd )
+          print filename
+          print 'Start address:', self.state.pc
+          print
+          print 'SECTIONS:'
+          print image.print_section_table( )
+          if image.symbols:
+            print
+            print 'SYMBOL TABLE:'
+            print image.print_symbol_table( )
+          for section in image.get_sections( ):
+            print
+            print '%s <%s>:' % ( hex( section.addr ), section.name )
+            start_addr = section.addr
+            zero = False  # Never print a section full of zeros.
+            s = struct.Struct( '<HH' )  # Assume little endian.
+            for i in xrange( len( section.data ) / 4 ):
+              hi, lo = s.unpack( ''.join( section.data[ i : i+4 ] ) )
+              word = ( hi << 16 ) | lo
+              if word == 0 and zero :
+                continue
+              elif word == 0:
+                zero = True
+              try:
+                inst = self.decode( word )
+              except FatalError:
+                continue
+              print  '%s:\t%s %s\t%s' % ( pad_hex( start_addr + ( i * 4 ) ),
+                                          pad_hex( hi, 4 ),
+                                          pad_hex( lo, 4 ),
+                                          inst[0].str )
+        return 0
 
       # Execute the program
 
