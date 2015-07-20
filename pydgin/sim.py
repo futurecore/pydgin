@@ -337,25 +337,30 @@ class Sim( object ):
             print image.print_symbol_table( )
           for section in image.get_sections( ):
             print
-            print '%s <%s>:' % ( hex( section.addr ), section.name )
-            start_addr = section.addr
+            print '%s <%s>:' % ( pad_hex( section.addr ), section.name )
             zero = False  # Never print a section full of zeros.
             s = struct.Struct( '<HH' )  # Assume little endian.
-            for i in xrange( len( section.data ) / 4 ):
-              hi, lo = s.unpack( ''.join( section.data[ i : i+4 ] ) )
-              word = ( hi << 16 ) | lo
+            pc = 0
+            while True:
+              if ( pc + 4 ) > len ( section.data ):
+                break
+              hi, lo = s.unpack( ''.join( section.data[ pc : pc + 4 ] ) )
+              word = ( lo << 16 ) | hi
               if word == 0 and zero :
-                continue
+                break
               elif word == 0:
                 zero = True
               try:
-                inst = self.decode( word )
+                inst = ( self.decode( word ) )[0]
+                lo = 0 if inst.str.endswith( '16' ) else lo
               except FatalError:
+                pc += 4
                 continue
-              print  '%s:\t%s %s\t%s' % ( pad_hex( start_addr + ( i * 4 ) ),
+              print  '%s:\t%s %s\t%s' % ( pad_hex( section.addr + pc, 8 ),
                                           pad_hex( hi, 4 ),
                                           pad_hex( lo, 4 ),
-                                          inst[0].str )
+                                          inst.str )
+              pc += 2 if inst.str.endswith( '16' ) else 4
         return 0
 
       # Execute the program
