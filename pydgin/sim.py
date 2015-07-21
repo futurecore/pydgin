@@ -3,7 +3,6 @@
 #=======================================================================
 # This is the common top-level simulator. ISA implementations can use
 # various hooks to configure the behavior.
-import struct
 import sys
 
 # ensure we know where the pypy source code is
@@ -25,6 +24,21 @@ from pydgin.jit   import JitDriver, hint, set_user_param, set_param
 def jitpolicy(driver):
   from rpython.jit.codewriter.policy import JitPolicy
   return JitPolicy()
+
+
+try:
+  from rpython.rlib.rarithmetic import string_to_int
+  def string_to_half_words( string ):
+    assert len( string ) >= 4
+    hi = string_to_int( string[ 0 : 2 ], base=16 )
+    lo = string_to_int( string[ 2 : 4 ], base=16 )
+    return hi, lo
+except ImportError:
+  import struct
+  _half_word_unpacker = struct.Struct( '<HH' )  # Assume little endian.
+  def string_to_half_words( string ):
+    return _half_word_unpacker.unpack( string )
+
 
 #-------------------------------------------------------------------------
 # Sim
@@ -324,43 +338,44 @@ class Sim( object ):
       # If the user requested an object dump, print one and return.
 
       if ( objdump ):
-        with open( filename, 'rb' ) as elf_fd:
-          image = elf_reader( elf_fd )
-          print filename
-          print 'Start address:', self.state.pc
+        elf_fd = open( filename, 'rb' )
+        image = elf_reader( elf_fd )
+        print filename
+        print 'Start address:', self.state.pc
+        print
+        print 'SECTIONS:'
+        print image.print_section_table( )
+        if image.symbols:
           print
-          print 'SECTIONS:'
-          print image.print_section_table( )
-          if image.symbols:
-            print
-            print 'SYMBOL TABLE:'
-            print image.print_symbol_table( )
-          for section in image.get_sections( ):
-            print
-            print '%s <%s>:' % ( pad_hex( section.addr ), section.name )
-            zero = False  # Never print a section full of zeros.
-            s = struct.Struct( '<HH' )  # Assume little endian.
-            pc = 0
-            while True:
-              if ( pc + 4 ) > len ( section.data ):
-                break
-              hi, lo = s.unpack( ''.join( section.data[ pc : pc + 4 ] ) )
-              word = ( lo << 16 ) | hi
-              if word == 0 and zero :
-                break
-              elif word == 0:
-                zero = True
-              try:
-                inst = ( self.decode( word ) )[0]
-                lo = 0 if inst.str.endswith( '16' ) else lo
-              except FatalError:
-                pc += 4
-                continue
-              print  '%s:\t%s %s\t%s' % ( pad_hex( section.addr + pc, 8 ),
-                                          pad_hex( hi, 4 ),
-                                          pad_hex( lo, 4 ),
-                                          inst.str )
-              pc += 2 if inst.str.endswith( '16' ) else 4
+          print 'SYMBOL TABLE:'
+          print image.print_symbol_table( )
+        for section in image.get_sections( ):
+          print
+          print '%s <%s>:' % ( pad_hex( section.addr ), section.name )
+          zero = False  # Never print a section full of zeros.
+          pc = 0
+          while True:
+            if ( pc + 4 ) > len ( section.data ):
+              break
+            assert pc > 0
+            hi, lo = string_to_half_words( ''.join( section.data[ pc : pc + 4 ] ) )
+            word = ( lo << 16 ) | hi  # Little endian.
+            if word == 0 and zero :
+              break
+            elif word == 0:
+              zero = True
+            try:
+              inst = ( self.decode( word ) )[ 0 ]
+              lo = 0 if inst.str.endswith( '16' ) else lo
+            except FatalError:
+              pc += 4
+              continue
+            print  '%s:\t%s %s\t%s' % ( pad_hex( section.addr + pc, 8 ),
+                                        pad_hex( hi, 4 ),
+                                        pad_hex( lo, 4 ),
+                                        inst.str )
+            pc += 2 if inst.str.endswith( '16' ) else 4
+        elf_fd.close( )
         return 0
 
       # Execute the program
