@@ -21,7 +21,7 @@ except ImportError:
 # Sign extend 16-bit value.
 def sext_16( value ):
   if value & 0x8000:
-    return r_uint( 0xFFFF0000 ) | value
+    return intmask(r_uint( 0xFFFF0000 ) | r_uint(value))
   return value
 
 #-----------------------------------------------------------------------
@@ -30,7 +30,7 @@ def sext_16( value ):
 # Sign extend 8-bit value
 def sext_8( value ):
   if value & 0x80:
-    return r_uint( 0xFFFFFF00 ) | value
+    return intmask(r_uint( 0xFFFFFF00 ) | r_uint(value))
   return value
 
 #-----------------------------------------------------------------------
@@ -49,7 +49,7 @@ def signed( value ):
 @specialize.argtype(0)
 def trim_32( value ):
   value = r_uint( value )
-  return value & r_uint( 0xFFFFFFFF )
+  return intmask(value & r_uint( 0xFFFFFFFF ))
 
 #-----------------------------------------------------------------------
 # trim_16
