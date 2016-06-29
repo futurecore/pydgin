@@ -529,10 +529,8 @@ def elf_reader( file_obj, is_64bit=False ):
     section_name = start.split('\0', 1)[0]
 
     # Read the section data if it exists
-    if (shdr.type == ElfSectionHeader.TYPE_NULL or
-        section_name == '.comment' or
-        section_name == '.stab' or
-        section_name.startswith('.debug')):
+    if (not (shdr.flags & ElfSectionHeader.FLAGS_ALLOC) and
+        section_name != 'loader_cfg'):
       continue
     elif shdr.type == ElfSectionHeader.TYPE_NOBITS:
       data = '\0' * shdr.size  # Section contains no data.
